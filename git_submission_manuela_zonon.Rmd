@@ -1,0 +1,34 @@
+---
+title: "git_submission_manuela_zonon"
+author: "Manuela"
+date: "11 septembre 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r}
+getwd()
+source("R/plotBED.R")
+```
+
+
+```{r}
+dataBED <- read.csv("data/dataBED.csv")
+```
+
+
+```{r}
+data <- dataBED
+```
+
+
+# Guest nights in 2018 in the county of Tromso
+
+```{r}
+plotBED(data$date , data$guestNights2018)
+```
+
+In 2018 in July there was more guests than during the rest of the year in Tromos, they were ` r 7931 * 10 `
