@@ -1,0 +1,359 @@
+---
+title: "Task 1"
+author: "Manuela"
+date: "23 septembre 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+#Task 1
+
+## Downloading the two data as Json and changing the columns names
+
+```{r}
+url <- "https://data.ssb.no/api/v0/dataset/95274.json?lang=no"
+datanewcounties <- GET(url)
+str(datanew)
+datanewtextcounties <- content(datanewcounties, as="text")
+
+
+url2 <- "http://data.ssb.no/api/v0/dataset/95276.json?lang=no"
+datanew2 <- GET(url2)
+datanewtext2 <- content(datanew2, as ="text")
+
+```
+
+
+```{r}
+datanewparsedcounties <- content(datanewcounties, as="parsed")
+dataJsoncounties <- fromJSONstat(datanewtextcounties)
+dataJsoncounties
+str(dataJsoncounties)
+class(dataJsoncounties)
+
+datanewparsed2 <- content(datanew2, as = "parsed")
+dataJsoncountry <- fromJSONstat(datanewtext2)
+dataJsoncountry
+str(dataJsoncountry)
+```
+
+
+```{r}
+dataJcounties <- dataJsoncounties$`03616: Hotell og liknande overnattingsbedrifter. Kapasitetsutnytting og pris per rom, etter region, måned og statistikkvariabel`
+dataJcounties <- dataJcounties %>% rename( "date" = "måned" , "variable" = "statistikkvariabel")
+
+
+dataJcountry <- dataJsoncountry$`03616: Hotell og liknande overnattingsbedrifter. Kapasitetsutnytting og pris per rom, etter region, måned og statistikkvariabel`
+dataJcountry <- dataJcountry %>% rename("date" = "måned" , "variable" = "statistikkvariabel")
+```
+
+## Changing the date format and labels to english
+```{r}
+dataJcounties$date <- as.character(dataJcounties$date)
+dataJcounties$date <- str_replace(dataJcounties$date, "M", "01")
+dataJcounties$date <- as.Date(dataJcounties$date, format="%Y%d%m")
+dataJcounties$variable<- recode(dataJcounties$variable, 
+                                      
+                                      "Kapasitetsutnytting av senger (prosent)" = "Beds percentage capacity utilization",
+                                      
+                                      "Kapasitetsutnytting av rom (prosent)" = "Rooms percentage capacity utilization",
+                                      
+                                      "Pris per rom (kr)" = "Price per room (kr)")
+
+
+dataJcountry$date <- as.character(dataJcountry$date)
+dataJcountry$date <- str_replace(dataJcountry$date, "M", "01")
+dataJcountry$date <- as.Date(dataJcountry$date, format="%Y%d%m")
+dataJcountry$variable<- recode(dataJcountry$variable, 
+                                      
+                                      "Kapasitetsutnytting av senger (prosent)" = "Beds percentage capacity utilization",
+                                      
+                                      "Kapasitetsutnytting av rom (prosent)" = "Rooms percentage capacity utilization",
+                                      
+                                      "Pris per rom (kr)" = "Price per room (kr)")
+
+```
+
+
+## Merging the two dataframes
+
+```{r}
+counties_country <- rbind(dataJcounties, dataJcountry)
+```
+
+
+## Calculation the difference between county average room price and the national average room price per month / highest positive and negative difference in price
+
+### Creating a new column for month
+
+```{r}
+counties_country$month <- format(counties_country$date, "%m")
+```
+
+```{r}
+average_rp_per_m_counties <- counties_country %>% 
+  filter(value != 0.0, variable == "Price per room (kr)" , region!="Hele landet") %>% 
+  group_by(month) %>% 
+  summarise(mean_room_price_c = mean(value))
+print(average_rp_per_m_counties)
+
+average_rp_per_m_countries <- counties_country %>% filter(value != 0.0, variable == "Price per room (kr)", region == "Hele landet") %>%
+  group_by(month) %>% summarise(mean_room_price_C = mean(value))
+print(average_rp_per_m_countries)
+```
+
+
+```{r}
+counties_average_roomp_byregion <- counties_country %>% 
+  filter(value != 0.0, variable == "Price per room (kr)", region != "Hele landet") %>% 
+  group_by(region, month) %>% 
+  summarise(mean_room_price_c1 = mean(value))
+print(counties_average_roomp_byregion)
+
+country_average_roompbyregion <- counties_country %>% filter(value != 0.0, variable == "Price per room (kr)", region == "Hele landet") %>%
+  group_by(region, month) %>% summarise(mean_room_price_C1 = mean(value))
+counties_average_roomp_byregion$diff_rp_C1 <- counties_average_roomp_byregion$mean_room_price_c1 - country_average_roompbyregion$mean_room_price_C1
+print(counties_average_roomp_byregion$diff_rp_C1)
+
+
+```
+
+
+```{r}
+max_diff_rp1 <- max(counties_average_roomp_byregion$diff_rp_C1)
+print(max_diff_rp1)
+
+min_diff_rp1 <- min(counties_average_roomp_byregion$diff_rp_C1)
+print(min_diff_rp1)
+```
+
+
+## Same calculation per county and per year
+
+### Creating a new column for the year
+
+```{r}
+counties_country$year <- format(counties_country$date,"%Y")
+```
+
+
+```{r}
+counties_average_roomperyear <- counties_country %>% 
+  filter(value != 0.0, variable == "Price per room (kr)", region != "Hele landet") %>% 
+  group_by(year) %>% 
+  summarise(mean_room_price_c2 = mean(value))
+print(counties_average_roomperyear)
+
+country_average_roomperyear <- counties_country %>% filter(value != 0.0, variable == "Price per room (kr)", region == "Hele landet") %>%
+  group_by(year) %>% summarise(mean_room_price_C2 = mean(value))
+print(country_average_roomperyear)
+
+```
+
+
+### Making a table to join the averages room price per year for counties and country
+```{r}
+joinaverages <- left_join(counties_average_roomperyear,country_average_roomperyear, by="year")
+
+joinaverages$diff_rp <- joinaverages$mean_room_price_C2 - joinaverages$mean_room_price_c2
+
+print(joinaverages$diff_rp)
+
+```
+
+
+```{r}
+max_year <-max(joinaverages$diff_rp)
+
+print(max_year)
+
+min_year <- min(joinaverages$diff_rp)
+print(min_year)
+```
+
+
+## Plot of the monthly price difference for Troms' county from 1999 until today
+
+
+```{r}
+Troms_County <- counties_country %>% filter(region == "Troms - Romsa", date >= "1999-01-01", value != 0.0, variable == "Price per room (kr)")
+Troms_Country <- counties_country %>% filter(region == "Hele landet", date >= "1999-01-01", value != 0.0, variable == "Price per room (kr)")
+Troms_County$diff_rp_C <- Troms_County$value - Troms_Country$value
+
+```
+
+
+```{r}
+Troms_plot <- plot(x= Troms_County$date, y = Troms_County$diff_rp_C, type = "l", cex.lab=0.80, cex.main=0.80, col="purple",
+     xlab="Month", 
+     ylab="Room price difference month", 
+     main="Difference of average country's room price compared to average Troms county's room price by month from 1999 until today")
+
+```
+
+
+
+## Possible relationship (correlation) between room capacity and price since January 2010
+
+### Creating two tables for room capacity and price, then joining them in one table
+
+```{r}
+counties_country_roomcapacity <- counties_country %>% filter(variable == "Rooms percentage capacity utilization") %>% 
+  mutate(roomcapacity_value = value) %>% 
+  select("region","date","roomcapacity_value")
+
+
+counties_country_pr <- counties_country %>% filter(variable == "Price per room (kr)") %>% 
+  mutate(Price_Value = value) %>% 
+  select("region","date","Price_Value")
+
+
+roomprice_counties_country <- left_join(counties_country_roomcapacity,counties_country_pr, by = c("region", "date"))
+roomprice_counties_country
+
+```
+
+
+### Trying to find out if there is a correlation for each county by making plots
+
+```{r}
+rp_Joined_Osfold <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Østfold", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Osfold, title="Correlation btw room capacity and price since January 2010 for Østfold's county")
+#### Moderate correlation 
+
+rp_Joined_Akershus <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Akershus", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Akershus, title="Correlation between room capacity and price since January 2010 for Akershus's county")
+#### Relative correlation
+
+rp_Joined_AustAgder <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Aust-Agder", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_AustAgder, title="Correlation between room capacity and price since January 2010 for Aust-Agder's county")
+#### Correlation
+
+rp_Joined_Buskerud <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Buskerud", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Buskerud, title="Correlation between room capacity and price since January 2010 for Buskerud's county")
+#### No correlation
+```
+
+
+```{r}
+rp_Joined_FinnmarkFinnmarku <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Finnmark - Finnmárku", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_FinnmarkFinnmarku, title="Correlation between room capacity and price since January 2010 for Finnmark - Finnmárku's county")
+#### Relative Correlation
+
+
+rp_Joined_Hedmark <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Hedmark", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Hedmark, title="Correlation between room capacity and price since January 2010 for Hedmark's county")
+#### Relative correlation
+
+
+rp_Joined_Hele_landet <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Hele landet", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Hele_landet, title="Correlation between room capacity and price since January 2010 for Hele landet's county")
+#### Small correlation
+
+
+rp_Joined_Hordaland <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Hordaland", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Hordaland, title="Correlation between room capacity and price since January 2010 for Hordaland's county")
+#### Important correlation
+```
+
+
+```{r}
+rp_Joined_More_og_Romsdal <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Møre og Romsdal", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_More_og_Romsdal, title="Correlation between room capacity and price since January 2010 for Møre og Romsdal's county")
+#### Important correlation
+
+
+rp_Joined_NordTrondelag <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Nord-Trøndelag (-2017)", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_NordTrondelag, title="Correlation between room capacity and price since January 2010 for Nord-Trøndelag's county")
+#### Relative correlation
+
+
+rp_Joined_Nordland <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Nordland", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Nordland, title="Correlation between room capacity and price since January 2010 for Nordland's county")
+#### Relative correlation
+
+
+rp_Joined_Oppland <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Oppland", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Oppland, title="Correlation between room capacity and price since January 2010 for Oppland's county")
+#### Relative correlation
+
+```
+
+
+```{r}
+rp_Joined_Oslo <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Oslo", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Oslo, title="Correlation between room capacity and price since January 2010 for Oslo's county")
+#### Correlation
+
+rp_Joined_Rogaland <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Rogaland", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Rogaland, title="Correlation between room capacity and price since January 2010 for Rogaland's county")
+#### Relative correlation
+
+
+rp_Joined_Sogn_og_Fjordane <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Sogn og Fjordane", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Sogn_og_Fjordane, title="Correlation between room capacity and price since January 2010 for Sogn og Fjordane's county")
+#### Moderate correlation
+
+
+rp_Joined_SorTrondelag <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Sør-Trøndelag (-2017)", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_SorTrondelag, title="Correlation between room capacity and price since January 2010 for Sør-Trøndelag's county")
+#### Relative correlation
+```
+
+
+```{r}
+rp_Joined_Svalbard <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Svalbard", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Svalbard, title="Correlation between room capacity and price since January 2010 for Svalbard's county")
+#### Important correlation
+
+
+rp_Joined_Telemark <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Telemark", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Telemark, title="Correlation between room capacity and price since January 2010 for Telemark's county")
+#### Moderate Correlation
+
+
+rp_Joined_TromsRomsa <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Troms - Romsa", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_TromsRomsa, title="Correlation between room capacity and price since January 2010 for Troms - Romsa's county")
+#### Correlation
+
+
+rp_Joined_Trondelag <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Trøndelag", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Trondelag, title="Correlation between room capacity and price since January 2010 for Trøndelag's county")
+#### Relative Correlation
+```
+
+
+
+```{r}
+rp_Joined_VestAgder <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Vest-Agder", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_VestAgder, title="Correlation between room capacity and price since January 2010 for Vest-Agder's county")
+#### Important correlation
+
+
+rp_Joined_Vestfold <- roomprice_counties_country %>% filter(date >= "2010-01-01", region== "Vestfold", Price_Value != 0.0) %>% select(-"date", -"region")
+plot_correlation(rp_Joined_Vestfold, title="Correlation between room capacity and price since January 2010 for Vestfold's county")
+#### No correlation
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
