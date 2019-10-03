@@ -1,0 +1,117 @@
+---
+title: "Task 2"
+author: "Manuela"
+date: "3 octobre 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+###Importing the data from January 2018 to January 2019
+
+
+```{r}
+urltask2 <- read_html("https://w2.brreg.no/kunngjoring/kombisok.jsp?datoFra=01.01.2018&datoTil=01.01.2019&id_region=100&id_fylke=-+-+-&id_niva1=2&id_bransje1=0")
+```
+
+```{r}
+urltask2 <- html_nodes(urltask2, xpath = "//table")
+
+
+task2company <- html_nodes(urltask2, "table")
+```
+
+
+```{r}
+Companies_registrations <- html_table(task2company[[1]])
+
+```
+### Looking a the data
+```{r}
+
+str(Companies_registrations)
+
+#### While looking at the data some columns are useless for the task so I'll supress them while cleaning the data
+```
+
+###Cleaning the data
+```{r}
+New_cleaned_table <- Companies_registrations %>% 
+
+               select(X2,X6) %>% #keeping the relevant columns
+
+               slice(6:2227) %>% #removing the first rows that are empty
+
+               rename(Name_of_company = X2, Date_of_registration = X6) %>% #renaming 
+
+               mutate(county = "") #creation of a county variable
+
+
+```
+
+### Heading for each county
+```{r}
+New_cleaned_table[c(2:1054),"county"] <- "Nordland"
+
+New_cleaned_table[c(1057:1808),"county"] <- "Troms"
+
+New_cleaned_table[c(1811:2221),"county"] <- "Finnmark"
+
+
+```
+###Cleaning the data even more by removing some rows
+
+```{r}
+company_data <- New_cleaned_table[-c(1,1055,1056,1809,1810,2222),]
+```
+
+###Creating the month column/variable with lubridate
+```{r}
+company_data$Date_of_registration <- as.Date(company_data$Date_of_registration, format="%d.%m.%Y") #Getting date of registration to date format
+
+company_data$month <- month(company_data$Date_of_registration, label=TRUE, abbr=FALSE)
+
+
+```
+
+###Fisrt Plot
+```{r}
+ggplot(company_data, aes(month)) + 
+
+  geom_bar(fill = "purple", colour="Purple") + 
+
+  xlab("Month") + 
+
+  ylab("Companies") + 
+
+  ggtitle("Amount of companies registered per month")
+```
+###Second Plot
+
+```{r}
+ggplot(company_data, aes(county)) + 
+
+  geom_bar(fill="Pink", colour="Red") + 
+
+  xlab("Month") + 
+
+  ylab("County") + 
+
+  ggtitle("Amount of companies registered per county")
+```
+###Final plot
+
+```{r}
+ggplot(company_data, aes(month)) + 
+
+  geom_bar(aes(fill=county), colour = "Red") + 
+
+  xlab("Month") + 
+
+  ylab("Amount of companies") + 
+
+  ggtitle("Amount of companies registered per month and per county")
+```
+
