@@ -1,0 +1,143 @@
+---
+title: "Untitled"
+author: "Manuela"
+date: "18 novembre 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Downloading packages I need
+```{r}
+library(readxl)
+library(openxlsx)
+library(car)
+library(tidyr)
+library(tidyverse)
+library(readr)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+```
+
+# Importing the file and cleaning it a little 
+```{r}
+storedata <- read_csv("storedata.csv")
+```
+
+##Table 1 : Total sales by months in 2017 last three months for Region 1 and 9
+```{r}
+###Cleaning and Keeping what's intersting
+table_1 <- storedata%>%filter(Region%in%c("Region 1", "Region 9"), Customer_Segment%in%c("Corporate", "Consumer"))
+table_1 <- arrange(table_1,Order_Date)
+
+table_1 <- table_1[1181:1237,c(2,4,7,9)]
+table_1 <- arrange(table_1,Region)
+
+```
+
+```{r}
+###Calculating the sums
+October_R1 <- table_1[1:4,2]%>% summarize(Sales_Oct_R1=sum(Sales))
+sum_O_R1<- print(October_R1)
+November_R1 <- table_1[5:13,2]%>% summarize(Sales_Nov_R1=sum(Sales))
+sum_N_R1<-print(November_R1)
+December_R1 <- table_1[14:22,2]%>% summarize(Sales_Dec_R1=sum(Sales))
+sum_D_R1<- print(December_R1)
+
+October_R9 <- table_1[23:41,2]%>% summarize(Sales_Oct_R9=sum(Sales))
+sum_O_R9<- print(October_R9)
+November_R9 <- table_1[42:49,2]%>% summarize(Sales_Nov_R9=sum(Sales))
+sum_N_R9<- print(November_R9)
+December_R9 <- table_1[50:57,2]%>% summarize(Sales_Dec_R9=sum(Sales))
+sum_D_R9<- print(December_R9)
+
+```
+
+```{r}
+###Creating the final output
+Months <- c("October","November","December","October","November","December")
+sum_sales <- c(sum_O_R1,sum_N_R1,sum_D_R1,sum_O_R9,sum_N_R9,sum_D_R9)
+Regions <- c("Region1","Region9","Region1","Region9","Region1","Region9")
+Table_1 <- data.frame(Months,sum_sales,Regions)
+print(Table_1)
+```
+
+##Monthly Sales Plot
+```{r}
+##Keeping the rows I need and reordoring the data
+Table_figure1 <- storedata[c(2,4,9)]
+Table_figure1 <-Table_figure1%>% filter(Region%in% c("Region 1","Region 13"))
+Table_figure1 <- arrange(Table_figure1,Order_Date)
+Table_figure1 <- Table_figure1[-c(1:283),]
+
+##Creating 3 new variables, Year, Month and assembling them into Year_Month
+Table_figure1 <- Table_figure1%>% mutate(Year=year(Order_Date), Month=month(Order_Date))%>%group_by(Year,Month,Region)%>% summarize(Sales_tot=sum(Sales)) 
+class(Table_figure1$Sales_tot)
+Table_figure1 <- Table_figure1%>%mutate(Year_Month=paste(Year,Month,sep="-"))
+
+class(Table_figure1$Year_Month)
+Table_figure1$Year_Month <- as.Date(Table_figure1$Year_Month, format="%Y-%m-%d")
+
+##Creating the Plot
+Figure_1 <- ggplot(Table_figure1, aes(x=Year_Month, y=Sales_tot, color=Region)) + geom_line()
+
+
+
+```
+
+##Table 2 : Months where Sales in Region 13 are higher than in Region 1 between 2015 and 2017
+
+```{r}
+## Keeping only the relevant columns and having the two regions as columns
+
+Table_2 <- Table_figure1[,3:5] %>% spread(Region, Sales_tot)
+
+Table2 <- Table_2 %>% filter(`Region 13`>`Region 1`)
+
+##Careful about writing `Region 13` like this instead of Regiion 13 to avoid an error message
+
+print(Table2)
+
+##There is 10 months when the Sales in Region 13 are higher than in Region 1 between 2015 and 2017 : for 2015(June,August, and the 3 last months), for 2016 (January,February,May and December), and for 2017, only June. 
+```
+
+
+## Table 3 : Segment with Highest Average Profit
+```{r}
+##Arranging the data as pleased again
+figure_3table<- storedata[c(2,5,7,8,9)]
+figure_3table <- figure_3table%>%filter(Region%in%c("Region 1", "Region 2", "Region 4","Region 6", "Region 7","Region 9", "Region 10", "Region 11", "Region 12", "Region 13")) 
+figure_3table<- arrange(figure_3table,Order_Date)
+figure_3table <- figure_3table[-c(1:4759),]
+```
+
+```{r}
+##Sums of Sales in Customer Segment
+Cons_Pr_avg <- figure_3table%>%filter(Customer_Segment%in%c("Consumer")) 
+Cons_avg <- Cons_Pr_avg%>%summarize(Cons_avg=mean(Profit))
+print(Cons_avg)
+
+Corp_Pr_avg <- figure_3table%>%filter(Customer_Segment%in%c("Corporate"))
+Corp_avg <- Corp_Pr_avg%>%summarize(Corp_avg=mean(Profit))
+print(Corp_avg)
+
+Home_Pr_avg <- figure_3table%>%filter(Customer_Segment%in%c("Home Office"))
+Home_avg <- Home_Pr_avg%>%summarize(Home_avg=mean(Profit))
+print(Home_avg)
+
+Small_Pr_avg <- figure_3table%>%filter(Customer_Segment%in%c("Small Business"))
+Small_avg <- Small_Pr_avg%>%summarize(Small_avg=mean(Profit))
+print(Small_avg)
+
+means <- c(Cons_avg,Corp_avg,Home_avg,Small_avg)
+means <- as.data.frame(means)
+Table_3 <- means %>% summarize(Highest_Average_Profit=max(means))
+print(Table_3)
+
+# The segment who produced the highest average profit in 2017 in all regions except 3,5 and 8 is Small Business segment with 181,942 
+```
+
